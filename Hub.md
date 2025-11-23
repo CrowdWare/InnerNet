@@ -25,3 +25,5 @@
 - Benefit kommunizieren: "Zeig, dass du Kapazitäten hast / Super Service anbietest" – dafür sichern (pin) sie ihren Eintrag.
 - Wege: persönlicher Hub/Pub (Community, Betreuung) oder online via Pinata & Co.
 - Klarer Trade-off: minimale Aktion (Pinning) gegen Sichtbarkeit und Auffindbarkeit.
+- Anpinnen/Repinnen des eigenen Profils oder öffentlicher Einträge kann als XP-Event genutzt werden (Incentive: Sichtbarkeit + Fortschritt).
+- Neue Leute ins InnerNet holen (Einladungen/Onboarding) gibt viel XP: Wer gefunden werden will, startet selbst und bringt Menschen rein, die wiederum andere suchen.
