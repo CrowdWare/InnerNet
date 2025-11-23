@@ -1,11 +1,12 @@
 Page {
   id: "home"
   title: "InnerNet"
+  padding: "16 16 16 0"
 
   Column {
     alignment: "center"
     spacing: 24
-    padding: "32 16 16 16"
+    padding: "16 16 16 32"
 
     Markdown { id: "appTitle" text: "# InnerNet"}
     Markdown { id: "tagline" text: "**Free your mind**. **Connect with yourself.**" }

@@ -96,10 +96,10 @@ private fun paddingValues(props: Map<String, PropertyValue>, defaultAll: Int): a
         1 -> androidx.compose.foundation.layout.PaddingValues(parts[0].dp)
         2 -> androidx.compose.foundation.layout.PaddingValues(horizontal = parts[1].dp, vertical = parts[0].dp)
         4 -> androidx.compose.foundation.layout.PaddingValues(
-            start = parts[3].dp,
-            top = parts[0].dp,
-            end = parts[1].dp,
-            bottom = parts[2].dp
+            start = parts[0].dp,
+            top = parts[1].dp,
+            end = parts[2].dp,
+            bottom = parts[3].dp
         )
         else -> androidx.compose.foundation.layout.PaddingValues(defaultAll.dp)
     }
@@ -125,7 +125,7 @@ private fun renderNode(node: SmlNode) {
     when (node.name) {
         "Page" -> {
             val pad = paddingValues(node.properties, defaultAll = 16)
-            println("RenderPage")
+            println("page $pad")
             Column(
                 modifier = Modifier.fillMaxSize().padding(pad),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -214,7 +214,7 @@ private fun renderNode(node: SmlNode) {
 @Composable
 private fun ColumnScope.renderNodeInColumn(node: SmlNode) {
     when (node.name) {
-        "Page", "Column" -> {
+        "Column" -> {
             // Nested Column stays in ColumnScope for children.
             val spacing = node.properties.int("spacing") ?: 0
             val pad = paddingValues(node.properties, defaultAll = if (node.name == "Page") 16 else 0)
@@ -314,7 +314,7 @@ private fun RowScope.renderNodeInRow(node: SmlNode) {
                 node.children.forEach { child -> renderNodeInRow(child) }
             }
         }
-        "Column", "Page" -> {
+        "Column" -> {
             val spacing = node.properties.int("spacing") ?: 0
             val pad = paddingValues(node.properties, defaultAll = if (node.name == "Page") 16 else 0)
             val align = when (node.properties.string("alignment")) {
