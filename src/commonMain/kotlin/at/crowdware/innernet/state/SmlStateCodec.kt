@@ -49,6 +49,13 @@ object SmlStateCodec {
             }
             appendLine("  }")
         }
+        state.answers.forEach { ans ->
+            appendLine("  Answer {")
+            appendLine("    date: \"${ans.date}\"")
+            appendLine("    question: \"${ans.question}\"")
+            appendLine("    text: \"${ans.text}\"")
+            appendLine("  }")
+        }
         appendLine("}")
     }
 
@@ -66,6 +73,7 @@ private class StateBuildingHandler : SmlHandler {
     private var profile: Profile? = null
     private val avatars = mutableListOf<Avatar>()
     private var today: Element.TodayDraft? = null
+    private val answers = mutableListOf<Answer>()
 
     private val stack = ArrayDeque<Element>()
 
@@ -77,6 +85,7 @@ private class StateBuildingHandler : SmlHandler {
             "Visual" -> stack.addLast(Element.VisualDraft())
             "Today" -> stack.addLast(Element.TodayDraft())
             "Quest" -> stack.addLast(Element.QuestDraft())
+            "Answer" -> stack.addLast(Element.AnswerDraft())
             else -> stack.addLast(Element.Unknown(name))
         }
     }
@@ -109,6 +118,11 @@ private class StateBuildingHandler : SmlHandler {
                 "xp" -> current.xp = value.asInt()
                 "done" -> current.done = value.asBoolean()
             }
+            is Element.AnswerDraft -> when (key) {
+                "date" -> current.date = value.asString()
+                "question" -> current.question = value.asString()
+                "text" -> current.text = value.asString()
+            }
             is Element.Root -> if (key == "version") version = value.asInt() ?: version
             else -> {} // ignore unknowns
         }
@@ -129,6 +143,7 @@ private class StateBuildingHandler : SmlHandler {
                 else -> {}
             }
             is Element.TodayDraft -> today = finished
+            is Element.AnswerDraft -> answers += finished.toAnswer()
             else -> {}
         }
     }
@@ -137,7 +152,8 @@ private class StateBuildingHandler : SmlHandler {
         version = version,
         profile = profile,
         avatars = avatars.toList(),
-        today = today?.toToday()
+        today = today?.toToday(),
+        answers = answers.toList()
     )
 }
 
@@ -191,6 +207,17 @@ private sealed interface Element {
             title = title.orEmpty(),
             xp = xp ?: 0,
             done = done ?: false
+        )
+    }
+    class AnswerDraft(
+        var date: String? = null,
+        var question: String? = null,
+        var text: String? = null
+    ) : Element {
+        fun toAnswer() = Answer(
+            date = date.orEmpty(),
+            question = question.orEmpty(),
+            text = text.orEmpty()
         )
     }
     class Unknown(val name: String) : Element

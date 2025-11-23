@@ -17,6 +17,7 @@ class SmlParsingTest {
         val decoded = SmlStateCodec.decode(encoded)
         assertEquals(state.profile?.nickname, decoded.profile?.nickname)
         assertEquals(state.avatars.first().visual?.hairColor, decoded.avatars.first().visual?.hairColor)
+        assertEquals(state.answers.first().text, decoded.answers.first().text)
     }
 
     private fun sampleState() = InnerNetState(
@@ -36,6 +37,13 @@ class SmlParsingTest {
                 )
             )
         ),
-        today = null
+        today = null,
+        answers = listOf(
+            at.crowdware.innernet.state.Answer(
+                date = "2025-11-23",
+                question = "Who do you want to be today?",
+                text = "Visionary"
+            )
+        )
     )
 }

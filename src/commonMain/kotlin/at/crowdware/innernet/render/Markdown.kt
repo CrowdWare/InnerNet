@@ -7,7 +7,8 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 
 /**
- * Minimal inline markdown parser supporting **bold**, *italic*, and heading prefixes (#, ##, ###).
+ * Minimal inline markdown parser supporting **bold**, *italic*, links [text](url),
+ * and heading prefixes (#, ##, ###).
  */
 fun parseInlineMarkdown(text: String): AnnotatedString = buildAnnotatedString {
     var i = 0
@@ -27,6 +28,20 @@ fun parseInlineMarkdown(text: String): AnnotatedString = buildAnnotatedString {
             toggle(SpanStyle(fontWeight = FontWeight.Bold))
             i += 2
             continue
+        }
+        if (text.startsWith("[", i)) {
+            val closeText = text.indexOf(']', startIndex = i + 1)
+            val openParen = if (closeText != -1) text.indexOf('(', startIndex = closeText) else -1
+            val closeParen = if (openParen != -1) text.indexOf(')', startIndex = openParen) else -1
+            if (closeText != -1 && openParen == closeText + 1 && closeParen != -1) {
+                val label = text.substring(i + 1, closeText)
+                val url = text.substring(openParen + 1, closeParen)
+                val start = length
+                append(label)
+                addStringAnnotation("URL", url, start, start + label.length)
+                i = closeParen + 1
+                continue
+            }
         }
         val c = text[i]
         if (c == '*') {

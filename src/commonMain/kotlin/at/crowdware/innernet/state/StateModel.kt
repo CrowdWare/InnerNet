@@ -4,7 +4,8 @@ data class InnerNetState(
     val version: Int = 1,
     val profile: Profile?,
     val avatars: List<Avatar>,
-    val today: Today?
+    val today: Today?,
+    val answers: List<Answer> = emptyList()
 )
 
 data class Profile(val nickname: String)
@@ -36,4 +37,10 @@ data class Today(
     val date: String,
     val selectedAvatarId: String?,
     val quests: List<Quest>
+)
+
+data class Answer(
+    val date: String,
+    val question: String,
+    val text: String
 )

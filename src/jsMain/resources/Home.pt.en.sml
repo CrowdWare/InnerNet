@@ -1,16 +1,16 @@
 Page {
-  id: "home"
+  id: "home_pt_en"
   title: "InnerNet"
 
   Column {
     alignment: "center"
     spacing: 24
-    padding: "32 16 16 16"
+    padding: 24
 
-    Markdown { id: "appTitle" text: "# InnerNet"}
-    Markdown { id: "tagline" text: "**Free your mind**. **Connect with yourself.**" }
+    Markdown { id: "appTitle" text: "# InnerNet" }
+    Markdown { id: "tagline" text: "**Free your mind.** **Connect with yourself.**" }
     Spacer { amount: 16 }
-    Text { id: "questionIntro" text: "Which question will guide you today?" style: "question" }
+    Markdown { id: "questionIntro" text: "Which question will guide you today?" }
     Column {
       spacing: 12
       Button { id: "q_who" text: "Who do you want to be today?" action: "goto_choose_avatar" }
@@ -19,6 +19,4 @@ Page {
       Button { id: "q_random" text: "Surprise me" action: "goto_random_question" }
     }
   }
-  Spacer { weight: 1}
-  Text { text: "Placeholder for the StatusBar" }
 }

@@ -16,7 +16,7 @@ fun main() {
     ComposeViewport(root) {
         AppRoot(
             themeStorage = WebThemeStorage,
-            loadSml = { fetchSml("home.sml") }
+            loadSml = { fetchVariantSml() }
         )
     }
 }
@@ -37,4 +37,23 @@ private object WebThemeStorage : ThemeStorage {
 private suspend fun fetchSml(path: String): String {
     val response = window.fetch(path).await()
     return response.text().await()
+}
+
+private suspend fun fetchVariantSml(): String {
+    val orientation = if (window.innerWidth > window.innerHeight) "ls" else "pt"
+    val lang = (window.navigator.language ?: "en").take(2).lowercase().let { if (it in setOf("de", "en")) it else "en" }
+    val baseName = "Home.$orientation.$lang.sml"
+    val fallback = "home.sml"
+    val paths = listOf(baseName, fallback)
+    var lastError: Throwable? = null
+    for (p in paths) {
+        try {
+            val res = window.fetch(p).await()
+            if (res.ok) return res.text().await()
+        } catch (t: Throwable) {
+            lastError = t
+        }
+    }
+    console.warn("Falling back to empty UI; tried $paths, last error: ${lastError?.message}")
+    return "Page { id: \"empty\" title: \"InnerNet\" }"
 }
