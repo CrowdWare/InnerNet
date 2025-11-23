@@ -1,51 +1,40 @@
 package at.crowdware.innernet
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.ComposeViewport
-import at.crowdware.innernet.render.RenderSml
+import at.crowdware.innernet.ui.AppRoot
+import at.crowdware.innernet.ui.ThemeMode
+import at.crowdware.innernet.ui.ThemeStorage
 import kotlinx.browser.document
 import kotlinx.browser.window
 import kotlinx.coroutines.await
+import kotlin.js.console
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     val root = document.getElementById("root") ?: error("Root element with id 'root' not found")
     ComposeViewport(root) {
-        MaterialTheme {
-            Surface(modifier = Modifier) {
-                AppContent()
-            }
-        }
+        AppRoot(
+            themeStorage = WebThemeStorage,
+            loadSml = { fetchSml("home.sml") }
+        )
     }
 }
 
-@Composable
-private fun AppContent() {
-    var smlText by remember { mutableStateOf<String?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+private object WebThemeStorage : ThemeStorage {
+    override fun load(): ThemeMode =
+        runCatching { window.localStorage.getItem("theme") }
+            .getOrNull()
+            ?.let { stored -> ThemeMode.values().firstOrNull { it.name.equals(stored, ignoreCase = true) } }
+            ?: ThemeMode.Dark
 
-    LaunchedEffect(Unit) {
-        try {
-            val response = window.fetch("home.sml").await()
-            smlText = response.text().await()
-        } catch (t: Throwable) {
-            error = t.message ?: t.toString()
-        }
+    override fun save(mode: ThemeMode) {
+        runCatching { window.localStorage.setItem("theme", mode.name) }
+            .onFailure { console.warn("Could not persist theme: ${it.message}") }
     }
+}
 
-    when {
-        error != null -> Text("Error: $error")
-        smlText == null -> Text("Loading…")
-        else -> RenderSml(smlText!!)
-    }
+private suspend fun fetchSml(path: String): String {
+    val response = window.fetch(path).await()
+    return response.text().await()
 }
