@@ -19,3 +19,9 @@
 - Austauschbarer Provider (Pinata o. Ä.), Migration/Re-Pin leicht möglich.
 - Keine Fachbegriffe für Nutzer ("Sichern", "immer erreichbar", statt "Pin/CID").
 - Opt-out jederzeit möglich.
+
+## Motivation "Gefunden werden"
+- Nutzer (Normalos wie Techies) wollen nicht nur suchen, sondern aktiv sichtbar sein: Profil pinnen = gefunden werden.
+- Benefit kommunizieren: "Zeig, dass du Kapazitäten hast / Super Service anbietest" – dafür sichern (pin) sie ihren Eintrag.
+- Wege: persönlicher Hub/Pub (Community, Betreuung) oder online via Pinata & Co.
+- Klarer Trade-off: minimale Aktion (Pinning) gegen Sichtbarkeit und Auffindbarkeit.
