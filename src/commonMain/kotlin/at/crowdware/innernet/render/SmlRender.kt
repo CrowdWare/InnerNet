@@ -16,6 +16,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import at.crowdware.sml.PropertyValue
 import at.crowdware.sml.SmlHandler
 import at.crowdware.sml.SmlParseException
@@ -67,6 +70,19 @@ fun defaultSmlRegistry(): SmlRenderRegistry = SmlRenderRegistry().apply {
     val textRenderer: SmlRenderer = { props, _ -> Text(props.string("text") ?: "") }
     register("Label", textRenderer)
     register("Text", textRenderer)
+    // Markdown
+    register("Markdown") { props, _ ->
+        val raw = props.string("text") ?: ""
+        val (heading, body) = stripHeading(raw)
+        val annotated: AnnotatedString = parseInlineMarkdown(body)
+        val style = when (heading) {
+            1 -> androidx.compose.material3.MaterialTheme.typography.headlineLarge
+            2 -> androidx.compose.material3.MaterialTheme.typography.headlineMedium
+            3 -> androidx.compose.material3.MaterialTheme.typography.headlineSmall
+            else -> androidx.compose.material3.MaterialTheme.typography.bodyMedium
+        }
+        Text(annotated, style = style)
+    }
     // Grid (fallback: stacked columns with spacing)
     register("Grid") { props, content ->
         val spacing = props.int("spacing") ?: 8

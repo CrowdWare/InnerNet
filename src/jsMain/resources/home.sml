@@ -7,8 +7,8 @@ Page {
     spacing: 24
     padding: 32
 
-    Text { id: "appTitle" text: "InnerNet" style: "title" }
-    Text { id: "tagline" text: "Free your mind. Connect with yourself." style: "subtitle" }
+    Markdown { id: "appTitle" text: "# InnerNet"}
+    Markdown { id: "tagline" text: "**Free your mind**. **Connect with yourself.**" }
     Spacer { amount: 16 }
     Text { id: "questionIntro" text: "Which question will guide you today?" style: "question" }
     Column {
