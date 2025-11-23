@@ -1,42 +1,62 @@
 package at.crowdware.innernet
 
-import androidx.compose.material3.Text
-import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.window.ComposeViewport
-import kotlinx.browser.document
-import at.crowdware.sml.*
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.ComposeViewport
+import at.crowdware.sml.PropertyValue
+import at.crowdware.sml.SmlHandler
+import at.crowdware.sml.SmlParseException
+import at.crowdware.sml.SmlSaxParser
+import at.crowdware.sml.Span
+import kotlinx.browser.document
+import kotlinx.browser.window
+import kotlinx.coroutines.await
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
-    val text = """
-        /*
-        Comment
-        */
-        Page {
-            id: "main"
-            title: "Hello World"
-            visible: true
-            width: 800
-            height: 600
+    val root = document.getElementById("root") ?: error("Root element with id 'root' not found")
+    ComposeViewport(root) {
+        MaterialTheme {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                var smlText by remember { mutableStateOf<String?>(null) }
+                var error by remember { mutableStateOf<String?>(null) }
 
-            Row {
-                spacing: 10
-                Label { text: "Hello" }
-                Label { text: "SML" }
+                LaunchedEffect(Unit) {
+                    try {
+                        val response = window.fetch("home.sml").await()
+                        smlText = response.text().await()
+                    } catch (t: Throwable) {
+                        error = t.message ?: t.toString()
+                    }
+                }
+
+                when {
+                    error != null -> Text("Error: $error")
+                    smlText == null -> Text("Loading…")
+                    else -> RenderSml(smlText!!)
+                }
             }
         }
-    """.trimIndent()
-
-    ComposeViewport(document.getElementById("root")!!) {
-        RenderSml(text)
     }
 }
 
@@ -55,32 +75,55 @@ fun defaultSmlRegistry(): SmlRenderRegistry = SmlRenderRegistry().apply {
     // Page -> Column mit Padding
     register("Page") { props, content ->
         val pad = props.int("padding") ?: 16
-        Column(Modifier.fillMaxSize().padding(pad.dp)) { content() }
+        Column(
+            modifier = Modifier.fillMaxSize().padding(pad.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) { content() }
     }
     // Row
     register("Row") { props, content ->
         val spacing = props.int("spacing") ?: 0
-        Row(Modifier.fillMaxWidth()) {
-            content()
-            if (spacing > 0) Spacer(Modifier.width(spacing.dp))
-        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(spacing.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) { content() }
     }
     // Column
     register("Column") { props, content ->
         val spacing = props.int("spacing") ?: 0
-        Column(Modifier.fillMaxWidth()) {
-            content()
-            if (spacing > 0) Spacer(Modifier.height(spacing.dp))
+        val pad = props.int("padding") ?: 0
+        val align = when (props.string("alignment")) {
+            "center" -> Alignment.CenterHorizontally
+            else -> Alignment.Start
         }
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(pad.dp),
+            verticalArrangement = Arrangement.spacedBy(spacing.dp),
+            horizontalAlignment = align
+        ) { content() }
     }
-    // Label -> Text
-    register("Label") { props, _ ->
-        Text(props.string("text") ?: "")
+    // Label/Text -> Text
+    val textRenderer: SmlRenderer = { props, _ -> Text(props.string("text") ?: "") }
+    register("Label", textRenderer)
+    register("Text", textRenderer)
+    // Grid (simple fallback to Column spacing)
+    register("Grid") { props, content ->
+        val spacing = props.int("spacing") ?: 8
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(spacing.dp)
+        ) { content() }
+    }
+    // Spacer
+    register("Spacer") { props, _ ->
+        val amount = props.int("amount") ?: 0
+        Spacer(Modifier.height(amount.dp))
     }
     // Button
     register("Button") { props, content ->
         val txt = props.string("text")
-        Button(onClick = { /* TODO: Aktion */ }) {
+        Button(onClick = { console.log("action: ${props.string("action")}") }) {
             if (txt != null) Text(txt)
             content()
         }
