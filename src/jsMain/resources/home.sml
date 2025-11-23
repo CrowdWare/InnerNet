@@ -1,0 +1,22 @@
+Page {
+  id: "home"
+  title: "InnerNet"
+
+  Column {
+    alignment: "center"
+    spacing: 24
+    padding: 32
+
+    Text { id: "appTitle" text: "InnerNet" style: "title" }
+    Text { id: "tagline" text: "Free your mind. Connect with yourself." style: "subtitle" }
+    Spacer { amount: 16 }
+    Text { id: "questionIntro" text: "Which question will guide you today?" style: "question" }
+    Column {
+      spacing: 12
+      Button { id: "q_who" text: "Who do you want to be today?" action: "goto_choose_avatar" }
+      Button { id: "q_what" text: "What do you truly want?" action: "goto_focus_goals" }
+      Button { id: "q_learn" text: "What do you want to learn today?" action: "goto_learning" }
+      Button { id: "q_random" text: "Surprise me" action: "goto_random_question" }
+    }
+  }
+}
