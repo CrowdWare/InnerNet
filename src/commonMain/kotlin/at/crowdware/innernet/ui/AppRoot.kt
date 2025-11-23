@@ -6,7 +6,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -63,7 +67,9 @@ fun AppRoot(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Button(onClick = { themeMode = themeMode.toggle() }) {
-                        Text(if (themeMode == ThemeMode.Light) "Light" else "Dark")
+                        val target = if (themeMode == ThemeMode.Light) Icons.Filled.DarkMode else Icons.Filled.LightMode
+                        val desc = if (themeMode == ThemeMode.Light) "Switch to dark mode" else "Switch to light mode"
+                        Icon(imageVector = target, contentDescription = desc)
                     }
                 }
                 when {
