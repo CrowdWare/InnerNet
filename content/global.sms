@@ -1,9 +1,5 @@
-var whichQuestion = "Which question will guide you today?"
 var statusMessage = "InnerNet loaded"
 
-fun randomNumber() {
-    return 13
-}
 
 fun setStatusMessage(value) {
     statusMessage = value

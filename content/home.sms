@@ -1,5 +1,9 @@
 var who = "Who do you want to be today? (model)"
+var whichQuestion = "Which question will guide you today?"
+var language = "en"
 
-fun myPageFunction() {
-    return "Hello word!"
-}
+var subLabel = "**Free your mind**. **Connect with yourself.**"
+    get() = when(language) {
+        "de" -> "**Befreie Deinen Verstand. Verbinde Dich mit Dir selbst**"
+        else -> "$field"
+    }

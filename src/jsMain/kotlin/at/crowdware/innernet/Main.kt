@@ -21,6 +21,7 @@ fun main() {
             loadPage = { fetchSmlPage(it) },
             loadScript = { fetchSmsScript(it) },
             openWeb = { openWebLink(it) },
+            language = currentLanguage(),
             onTitleChange = { document.title = it }
         )
     }
@@ -137,6 +138,9 @@ private suspend fun fetchSmsScript(name: String): String? {
     console.warn("Could not load sms script '$name'; tried ${paths.joinToString()} ($reason)")
     return null
 }
+
+private fun currentLanguage(): String =
+    (window.navigator.language ?: "en").take(2).lowercase()
 
 private fun resourcePaths(filename: String): List<String> =
     listOf("../content/$filename")

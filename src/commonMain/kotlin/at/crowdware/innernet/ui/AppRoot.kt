@@ -47,6 +47,7 @@ fun AppRoot(
     loadPage: suspend (String) -> LoadedSml,
     loadScript: suspend (String) -> String?,
     openWeb: suspend (String) -> Unit,
+    language: String? = null,
     onTitleChange: (String) -> Unit = {}
 ) {
     var themeMode by remember { mutableStateOf(themeStorage.load()) }
@@ -62,6 +63,7 @@ fun AppRoot(
         loadUiAndScripts(
             load = loadSml,
             loadScript = loadScript,
+            language = language,
             onSuccess = { text, engine ->
                 smlText = text.text
                 loadedName = text.name
@@ -125,6 +127,7 @@ fun AppRoot(
                                             loadUiAndScripts(
                                                 load = { loadPage(page) },
                                                 loadScript = loadScript,
+                                                language = language,
                                                 onSuccess = { text, engine ->
                                                     smlText = text.text
                                                     loadedName = text.name
@@ -159,6 +162,7 @@ fun AppRoot(
 private suspend fun loadUiAndScripts(
     load: suspend () -> LoadedSml,
     loadScript: suspend (String) -> String?,
+    language: String?,
     onSuccess: (LoadedSml, ScriptEngine?) -> Unit,
     onError: (String) -> Unit
 ) {
@@ -167,7 +171,7 @@ private suspend fun loadUiAndScripts(
         var engine: ScriptEngine? = null
         var scriptError: Throwable? = null
         try {
-            engine = prepareScriptEngine(loaded, loadScript)
+            engine = prepareScriptEngine(loaded, loadScript, language)
         } catch (t: Throwable) {
             scriptError = t
             updateStatusMessage(engine, t.message ?: t.toString())
@@ -181,7 +185,8 @@ private suspend fun loadUiAndScripts(
 
 private suspend fun prepareScriptEngine(
     loaded: LoadedSml,
-    loadScript: suspend (String) -> String?
+    loadScript: suspend (String) -> String?,
+    language: String?
 ): ScriptEngine {
     val engine = ScriptEngine.withStandardLibrary()
     engine.registerKotlinFunction("println") { args ->
@@ -193,6 +198,10 @@ private suspend fun prepareScriptEngine(
     val pageScript = extractPageScriptName(loaded.text) ?: defaultScriptNameFor(loaded.name)
     if (pageScript != null) {
         loadScript(pageScript)?.let { engine.execute(it) }
+    }
+    language?.let { lang ->
+        val escaped = lang.replace("\\", "\\\\").replace("\"", "\\\"")
+        runCatching { engine.execute("""language = "$escaped"""") }
     }
     return engine
 }
