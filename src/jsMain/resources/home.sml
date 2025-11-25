@@ -1,5 +1,4 @@
 Page {
-  id: "home"
   title: "InnerNet"
   padding: "16 16 16 0"
 
@@ -8,16 +7,16 @@ Page {
     spacing: 24
     padding: "16 16 16 32"
 
-    Markdown { id: "appTitle" text: "# InnerNet"}
-    Markdown { id: "tagline" text: "**Free your mind**. **Connect with yourself.**" }
+    Markdown { text: "# InnerNet"}
+    Markdown { text: "**Free your mind**. **Connect with yourself.**" }
     Spacer { amount: 16 }
-    Text { id: "questionIntro" text: "Which question will guide you today?" style: "question" }
+    Text { text: "Which question will guide you today?" style: "question" }
     Column {
       spacing: 12
-      Button { id: "q_who" text: "Who do you want to be today?" action: "goto_choose_avatar" }
-      Button { id: "q_what" text: "What do you truly want?" action: "goto_focus_goals" }
-      Button { id: "q_learn" text: "What do you want to learn today?" action: "goto_learning" }
-      Button { id: "q_random" text: "Surprise me" action: "goto_random_question" }
+      Button { label: "Who do you want to be today?" link: "page:who"}
+      Button { label: "What do you truly want?" link: "page:what"}
+      Button { label: "What do you want to learn today?" link: "page:learn"}
+      Button { label: "Surprise me" link: "page:surprise"}
     }
   }
   Spacer { weight: 1}

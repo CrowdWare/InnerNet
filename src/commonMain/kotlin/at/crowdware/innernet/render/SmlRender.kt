@@ -20,6 +20,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +40,8 @@ data class SmlNode(
     val properties: Map<String, PropertyValue>,
     val children: List<SmlNode>
 )
+
+private val LocalButtonLinkHandler = compositionLocalOf<(String) -> Unit> { {} }
 
 // ---------- Parsing ----------
 
@@ -105,16 +109,101 @@ private fun paddingValues(props: Map<String, PropertyValue>, defaultAll: Int): a
     }
 }
 
+@Composable
+private fun renderColumnNode(
+    node: SmlNode,
+    baseModifier: Modifier = Modifier.fillMaxWidth(),
+    defaultPadding: Int = 0,
+    defaultSpacing: Int = 0,
+    renderChild: @Composable ColumnScope.(SmlNode) -> Unit
+) {
+    val spacing = node.properties.int("spacing") ?: defaultSpacing
+    val pad = paddingValues(node.properties, defaultAll = defaultPadding)
+    val align = when (node.properties.string("alignment")) {
+        "center" -> Alignment.CenterHorizontally
+        else -> Alignment.Start
+    }
+    Column(
+        modifier = baseModifier.padding(pad),
+        verticalArrangement = Arrangement.spacedBy(spacing.dp),
+        horizontalAlignment = align
+    ) {
+        node.children.forEach { child -> renderChild(child) }
+    }
+}
+
+@Composable
+private fun renderRowNode(
+    node: SmlNode,
+    baseModifier: Modifier = Modifier.fillMaxWidth(),
+    defaultPadding: Int = 0,
+    defaultSpacing: Int = 0,
+    renderChild: @Composable RowScope.(SmlNode) -> Unit
+) {
+    val spacing = node.properties.int("spacing") ?: defaultSpacing
+    val pad = paddingValues(node.properties, defaultAll = defaultPadding)
+    Row(
+        modifier = baseModifier.padding(pad),
+        horizontalArrangement = Arrangement.spacedBy(spacing.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        node.children.forEach { child -> renderChild(child) }
+    }
+}
+
+@Composable
+private fun renderLink(node: SmlNode) {
+    val label = node.properties.string("text").orEmpty()
+    val href = node.properties.string("href").orEmpty()
+    ClickableText(
+        text = AnnotatedString(label),
+        style = MaterialTheme.typography.bodyMedium.copy(
+            color = MaterialTheme.colorScheme.primary,
+            textDecoration = TextDecoration.Underline
+        )
+    ) { console.log("open url: $href") }
+}
+
+@Composable
+private fun renderMarkdown(node: SmlNode) {
+    val raw = node.properties.string("text") ?: ""
+    val (heading, body) = stripHeading(raw)
+    val annotated: AnnotatedString = parseInlineMarkdown(body)
+    val style = when (heading) {
+        1 -> MaterialTheme.typography.headlineLarge
+        2 -> MaterialTheme.typography.headlineMedium
+        3 -> MaterialTheme.typography.headlineSmall
+        else -> MaterialTheme.typography.bodyMedium
+    }.copy(color = MaterialTheme.colorScheme.onBackground)
+    ClickableText(text = annotated, style = style) { offset ->
+        annotated.getStringAnnotations("URL", offset, offset).firstOrNull()
+            ?.let { console.log("open url: ${it.item}") }
+    }
+}
+
+@Composable
+private fun renderButton(node: SmlNode, renderChild: @Composable (SmlNode) -> Unit) {
+    val txt = node.properties.string("label")
+    val linkHandler = LocalButtonLinkHandler.current
+    val link = node.properties.string("link")
+    Button(onClick = { if (link != null) linkHandler(link) }) {
+        if (txt != null) Text(txt)
+        node.children.forEach { child -> renderChild(child) }
+    }
+}
+
 // ---------- Rendering entry ----------
 
 @Composable
-fun RenderSml(text: String) {
-    val roots = remember(text) { parseSml(text) }
-    val page = roots.firstOrNull { it.name == "Page" }
-    if (page != null) {
-        renderNode(page)
-    } else {
-        roots.forEach { renderNode(it) }
+fun RenderSml(text: String, onLinkClick: (String) -> Unit = {}) {
+    CompositionLocalProvider(LocalButtonLinkHandler provides onLinkClick) {
+        val roots = remember(text) { parseSml(text) }
+        val page = roots.firstOrNull { it.name == "Page" }
+        if (page != null) {
+            renderNode(page)
+        } else {
+            roots.forEach { renderNode(it) }
+        }
     }
 }
 
@@ -124,75 +213,25 @@ fun RenderSml(text: String) {
 private fun renderNode(node: SmlNode) {
     when (node.name) {
         "Page" -> {
-            val pad = paddingValues(node.properties, defaultAll = 16)
-            Column(
-                modifier = Modifier.fillMaxSize().padding(pad),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                node.children.forEach { child -> renderNodeInColumn(child) }
-            }
+            renderColumnNode(
+                node = node,
+                baseModifier = Modifier.fillMaxSize(),
+                defaultPadding = 16,
+                defaultSpacing = 16,
+                renderChild = { child -> renderNodeInColumn(child) }
+            )
         }
         "Column" -> {
-            val spacing = node.properties.int("spacing") ?: 0
-            val pad = paddingValues(node.properties, defaultAll = 0)
-            val align = when (node.properties.string("alignment")) {
-                "center" -> Alignment.CenterHorizontally
-                else -> Alignment.Start
-            }
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(pad),
-                verticalArrangement = Arrangement.spacedBy(spacing.dp),
-                horizontalAlignment = align
-            ) {
-                node.children.forEach { child -> renderNodeInColumn(child) }
-            }
+            renderColumnNode(node = node) { child -> renderNodeInColumn(child) }
         }
         "Row" -> {
-            val spacing = node.properties.int("spacing") ?: 0
-            val pad = paddingValues(node.properties, defaultAll = 0)
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(pad),
-                horizontalArrangement = Arrangement.spacedBy(spacing.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                node.children.forEach { child -> renderNodeInRow(child) }
-            }
+            renderRowNode(node = node) { child -> renderNodeInRow(child) }
         }
         "Spacer" -> Spacer(Modifier.height((node.properties.int("amount") ?: 0).dp))
         "Text" -> Text(node.properties.string("text") ?: "")
-        "Link" -> {
-            val label = node.properties.string("text").orEmpty()
-            val href = node.properties.string("href").orEmpty()
-            ClickableText(
-                text = AnnotatedString(label),
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.primary,
-                    textDecoration = TextDecoration.Underline
-                )
-            ) { console.log("open url: $href") }
-        }
-        "Markdown" -> {
-            val raw = node.properties.string("text") ?: ""
-            val (heading, body) = stripHeading(raw)
-            val annotated: AnnotatedString = parseInlineMarkdown(body)
-            val style = when (heading) {
-                1 -> MaterialTheme.typography.headlineLarge
-                2 -> MaterialTheme.typography.headlineMedium
-                3 -> MaterialTheme.typography.headlineSmall
-                else -> MaterialTheme.typography.bodyMedium
-            }.copy(color = MaterialTheme.colorScheme.onBackground)
-            ClickableText(text = annotated, style = style) { offset ->
-                annotated.getStringAnnotations("URL", offset, offset).firstOrNull()
-                    ?.let { console.log("open url: ${it.item}") }
-            }
-        }
-        "Button" -> {
-            val txt = node.properties.string("text")
-            Button(onClick = { console.log("action: ${node.properties.string("action")}") }) {
-                if (txt != null) Text(txt)
-                node.children.forEach { child -> renderNode(child) }
-            }
-        }
+        "Link" -> renderLink(node)
+        "Markdown" -> renderMarkdown(node)
+        "Button" -> renderButton(node) { child -> renderNode(child) }
         else -> {
             node.children.forEach { child -> renderNode(child) }
         }
@@ -206,32 +245,10 @@ private fun ColumnScope.renderNodeInColumn(node: SmlNode) {
     when (node.name) {
         "Column" -> {
             // Nested Column stays in ColumnScope for children.
-            val spacing = node.properties.int("spacing") ?: 0
-            val pad = paddingValues(node.properties, defaultAll = 0)
-            val align = when (node.properties.string("alignment")) {
-                "center" -> Alignment.CenterHorizontally
-                else -> Alignment.Start
-            }
-            Column(
-                modifier = Modifier
-                    .then(if (node.name == "Page") Modifier.fillMaxSize() else Modifier.fillMaxWidth())
-                    .padding(pad),
-                verticalArrangement = Arrangement.spacedBy(spacing.dp),
-                horizontalAlignment = align
-            ) {
-                node.children.forEach { child -> renderNodeInColumn(child) }
-            }
+            renderColumnNode(node = node) { child -> renderNodeInColumn(child) }
         }
         "Row" -> {
-            val spacing = node.properties.int("spacing") ?: 0
-            val pad = paddingValues(node.properties, defaultAll = 0)
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(pad),
-                horizontalArrangement = Arrangement.spacedBy(spacing.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                node.children.forEach { child -> renderNodeInRow(child) }
-            }
+            renderRowNode(node = node) { child -> renderNodeInRow(child) }
         }
         "Spacer" -> {
             val amount = node.properties.int("amount") ?: 0
@@ -240,39 +257,9 @@ private fun ColumnScope.renderNodeInColumn(node: SmlNode) {
             Spacer(mod)
         }
         "Text" -> Text(node.properties.string("text") ?: "")
-        "Link" -> {
-            val label = node.properties.string("text").orEmpty()
-            val href = node.properties.string("href").orEmpty()
-            ClickableText(
-                text = AnnotatedString(label),
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.primary,
-                    textDecoration = TextDecoration.Underline
-                )
-            ) { console.log("open url: $href") }
-        }
-        "Markdown" -> {
-            val raw = node.properties.string("text") ?: ""
-            val (heading, body) = stripHeading(raw)
-            val annotated: AnnotatedString = parseInlineMarkdown(body)
-            val style = when (heading) {
-                1 -> MaterialTheme.typography.headlineLarge
-                2 -> MaterialTheme.typography.headlineMedium
-                3 -> MaterialTheme.typography.headlineSmall
-                else -> MaterialTheme.typography.bodyMedium
-            }.copy(color = MaterialTheme.colorScheme.onBackground)
-            ClickableText(text = annotated, style = style) { offset ->
-                annotated.getStringAnnotations("URL", offset, offset).firstOrNull()
-                    ?.let { console.log("open url: ${it.item}") }
-            }
-        }
-        "Button" -> {
-            val txt = node.properties.string("text")
-            Button(onClick = { console.log("action: ${node.properties.string("action")}") }) {
-                if (txt != null) Text(txt)
-                node.children.forEach { child -> renderNode(child) }
-            }
-        }
+        "Link" -> renderLink(node)
+        "Markdown" -> renderMarkdown(node)
+        "Button" -> renderButton(node) { child -> renderNode(child) }
         else -> {
             node.children.forEach { child -> renderNodeInColumn(child) }
         }
@@ -285,41 +272,10 @@ private fun ColumnScope.renderNodeInColumn(node: SmlNode) {
 private fun RowScope.renderNodeInRow(node: SmlNode) {
     when (node.name) {
         "Row" -> {
-            val spacing = node.properties.int("spacing") ?: 0
-            val pad = paddingValues(node.properties, defaultAll = 0)
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(pad),
-                horizontalArrangement = Arrangement.spacedBy(spacing.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                node.children.forEach { child -> renderNodeInRow(child) }
-            }
+            renderRowNode(node = node) { child -> renderNodeInRow(child) }
         }
         "Column" -> {
-            val spacing = node.properties.int("spacing") ?: 0
-            val pad = paddingValues(node.properties, defaultAll = 0)
-            val align = when (node.properties.string("alignment")) {
-                "center" -> Alignment.CenterHorizontally
-                else -> Alignment.Start
-            }
-            Column(
-                modifier = Modifier
-                    .then(Modifier.fillMaxWidth())
-                    .padding(pad),
-                verticalArrangement = Arrangement.spacedBy(spacing.dp),
-                horizontalAlignment = align
-            ) {
-                node.children.forEach { child -> renderNodeInColumn(child) }
-            }
-        }
-        "Grid" -> {
-            val spacing = node.properties.int("spacing") ?: 8
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(spacing.dp)
-            ) {
-                node.children.forEach { child -> renderNodeInColumn(child) }
-            }
+            renderColumnNode(node = node) { child -> renderNodeInColumn(child) }
         }
         "Spacer" -> {
             val amount = node.properties.int("amount") ?: 0
@@ -328,39 +284,9 @@ private fun RowScope.renderNodeInRow(node: SmlNode) {
             Spacer(mod)
         }
         "Text" -> Text(node.properties.string("text") ?: "")
-        "Link" -> {
-            val label = node.properties.string("text").orEmpty()
-            val href = node.properties.string("href").orEmpty()
-            ClickableText(
-                text = AnnotatedString(label),
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.primary,
-                    textDecoration = TextDecoration.Underline
-                )
-            ) { console.log("open url: $href") }
-        }
-        "Markdown" -> {
-            val raw = node.properties.string("text") ?: ""
-            val (heading, body) = stripHeading(raw)
-            val annotated: AnnotatedString = parseInlineMarkdown(body)
-            val style = when (heading) {
-                1 -> MaterialTheme.typography.headlineLarge
-                2 -> MaterialTheme.typography.headlineMedium
-                3 -> MaterialTheme.typography.headlineSmall
-                else -> MaterialTheme.typography.bodyMedium
-            }.copy(color = MaterialTheme.colorScheme.onBackground)
-            ClickableText(text = annotated, style = style) { offset ->
-                annotated.getStringAnnotations("URL", offset, offset).firstOrNull()
-                    ?.let { console.log("open url: ${it.item}") }
-            }
-        }
-        "Button" -> {
-            val txt = node.properties.string("text")
-            Button(onClick = { console.log("action: ${node.properties.string("action")}") }) {
-                if (txt != null) Text(txt)
-                node.children.forEach { child -> renderNode(child) }
-            }
-        }
+        "Link" -> renderLink(node)
+        "Markdown" -> renderMarkdown(node)
+        "Button" -> renderButton(node) { child -> renderNode(child) }
         else -> {
             node.children.forEach { child -> renderNodeInRow(child) }
         }

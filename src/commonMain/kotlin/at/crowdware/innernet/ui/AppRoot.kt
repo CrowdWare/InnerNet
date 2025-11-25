@@ -21,11 +21,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import at.crowdware.innernet.render.RenderSml
+import kotlinx.coroutines.launch
 
 interface ThemeStorage {
     fun load(): ThemeMode
@@ -37,11 +39,14 @@ enum class ThemeMode { Light, Dark; fun toggle() = if (this == Light) Dark else 
 @Composable
 fun AppRoot(
     themeStorage: ThemeStorage,
-    loadSml: suspend () -> String
+    loadSml: suspend () -> String,
+    loadPage: suspend (String) -> String,
+    openWeb: suspend (String) -> Unit
 ) {
     var themeMode by remember { mutableStateOf(themeStorage.load()) }
     var smlText by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(themeMode) { themeStorage.save(themeMode) }
 
@@ -75,7 +80,36 @@ fun AppRoot(
                 when {
                     error != null -> Text("Error: $error")
                     smlText == null -> Text("Loading…")
-                    else -> RenderSml(smlText!!)
+                    else -> RenderSml(
+                        text = smlText!!,
+                        onLinkClick = { link ->
+                            scope.launch {
+                                when {
+                                    link.startsWith("page:") -> {
+                                        val page = link.removePrefix("page:").trim()
+                                        if (page.isEmpty()) return@launch
+                                        smlText = null
+                                        error = null
+                                        try {
+                                            smlText = loadPage(page)
+                                        } catch (t: Throwable) {
+                                            error = t.message ?: t.toString()
+                                        }
+                                    }
+                                    link.startsWith("web:") -> {
+                                        val target = link.removePrefix("web:").trim()
+                                        if (target.isEmpty()) return@launch
+                                        try {
+                                            openWeb(target)
+                                        } catch (t: Throwable) {
+                                            error = t.message ?: t.toString()
+                                        }
+                                    }
+                                    else -> error = "Unbekannter Link: $link"
+                                }
+                            }
+                        }
+                    )
                 }
             }
         }

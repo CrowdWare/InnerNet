@@ -16,7 +16,9 @@ fun main() {
     ComposeViewport(root) {
         AppRoot(
             themeStorage = WebThemeStorage,
-            loadSml = { fetchVariantSml() }
+            loadSml = { fetchVariantSml() },
+            loadPage = { fetchSmlPage(it) },
+            openWeb = { openWebLink(it) }
         )
     }
 }
@@ -56,4 +58,57 @@ private suspend fun fetchVariantSml(): String {
     }
     console.warn("Falling back to empty UI; tried $paths, last error: ${lastError?.message}")
     return "Page { id: \"empty\" title: \"InnerNet\" }"
+}
+
+private suspend fun fetchSmlPage(page: String): String {
+    val normalized = page.removePrefix("/").trim().ifEmpty { page }
+    val filename = if (normalized.endsWith(".sml")) normalized else "$normalized.sml"
+    val paths = listOf(
+        filename,
+        "wordpress-plugin/innernet-webapp/content/$filename",
+        "innernet-webapp/content/$filename"
+    )
+    var lastStatus: Int? = null
+    var lastError: Throwable? = null
+    for (p in paths) {
+        try {
+            val res = window.fetch(p).await()
+            if (res.ok) return res.text().await()
+            lastStatus = res.status.toInt()
+        } catch (t: Throwable) {
+            lastError = t
+        }
+    }
+    val reason = lastError?.message ?: lastStatus?.let { "HTTP $it" } ?: "unknown error"
+    throw IllegalStateException("Could not load page '$page'; tried ${paths.joinToString()} ($reason)")
+}
+
+private suspend fun openWebLink(raw: String) {
+    val normalized = raw.trim()
+    if (normalized.startsWith("http://") || normalized.startsWith("https://") || normalized.startsWith("//")) {
+        window.location.href = normalized
+        return
+    }
+    val localPath = normalized.removePrefix("/").ifEmpty { normalized }
+    val hasExtension = localPath.substringAfterLast('/', localPath).contains('.')
+    val filename = if (hasExtension) localPath else "$localPath.html"
+    val paths = listOf(
+        filename,
+        "wordpress-plugin/innernet-webapp/content/$filename",
+        "innernet-webapp/content/$filename",
+        localPath
+    )
+    for (p in paths) {
+        try {
+            val res = window.fetch(p).await()
+            if (res.ok) {
+                window.location.href = p
+                return
+            }
+        } catch (t: Throwable) {
+            console.warn("Could not reach $p: ${t.message}")
+        }
+    }
+    console.warn("No web target reachable for '$raw', falling back to first candidate: $filename")
+    window.location.href = filename
 }
