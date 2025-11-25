@@ -125,7 +125,6 @@ private fun renderNode(node: SmlNode) {
     when (node.name) {
         "Page" -> {
             val pad = paddingValues(node.properties, defaultAll = 16)
-            println("page $pad")
             Column(
                 modifier = Modifier.fillMaxSize().padding(pad),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -159,17 +158,8 @@ private fun renderNode(node: SmlNode) {
                 node.children.forEach { child -> renderNodeInRow(child) }
             }
         }
-        "Grid" -> {
-            val spacing = node.properties.int("spacing") ?: 8
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(spacing.dp)
-            ) {
-                node.children.forEach { child -> renderNodeInColumn(child) }
-            }
-        }
         "Spacer" -> Spacer(Modifier.height((node.properties.int("amount") ?: 0).dp))
-        "Text", "Label" -> Text(node.properties.string("text") ?: "")
+        "Text" -> Text(node.properties.string("text") ?: "")
         "Link" -> {
             val label = node.properties.string("text").orEmpty()
             val href = node.properties.string("href").orEmpty()
@@ -217,7 +207,7 @@ private fun ColumnScope.renderNodeInColumn(node: SmlNode) {
         "Column" -> {
             // Nested Column stays in ColumnScope for children.
             val spacing = node.properties.int("spacing") ?: 0
-            val pad = paddingValues(node.properties, defaultAll = if (node.name == "Page") 16 else 0)
+            val pad = paddingValues(node.properties, defaultAll = 0)
             val align = when (node.properties.string("alignment")) {
                 "center" -> Alignment.CenterHorizontally
                 else -> Alignment.Start
@@ -243,22 +233,13 @@ private fun ColumnScope.renderNodeInColumn(node: SmlNode) {
                 node.children.forEach { child -> renderNodeInRow(child) }
             }
         }
-        "Grid" -> {
-            val spacing = node.properties.int("spacing") ?: 8
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(spacing.dp)
-            ) {
-                node.children.forEach { child -> renderNodeInColumn(child) }
-            }
-        }
         "Spacer" -> {
             val amount = node.properties.int("amount") ?: 0
             val w = node.properties.int("weight")?.toFloat()
             val mod = if (w != null) Modifier.weight(weight = w) else Modifier.height(amount.dp)
             Spacer(mod)
         }
-        "Text", "Label" -> Text(node.properties.string("text") ?: "")
+        "Text" -> Text(node.properties.string("text") ?: "")
         "Link" -> {
             val label = node.properties.string("text").orEmpty()
             val href = node.properties.string("href").orEmpty()
@@ -316,14 +297,14 @@ private fun RowScope.renderNodeInRow(node: SmlNode) {
         }
         "Column" -> {
             val spacing = node.properties.int("spacing") ?: 0
-            val pad = paddingValues(node.properties, defaultAll = if (node.name == "Page") 16 else 0)
+            val pad = paddingValues(node.properties, defaultAll = 0)
             val align = when (node.properties.string("alignment")) {
                 "center" -> Alignment.CenterHorizontally
                 else -> Alignment.Start
             }
             Column(
                 modifier = Modifier
-                    .then(if (node.name == "Page") Modifier.fillMaxSize() else Modifier.fillMaxWidth())
+                    .then(Modifier.fillMaxWidth())
                     .padding(pad),
                 verticalArrangement = Arrangement.spacedBy(spacing.dp),
                 horizontalAlignment = align
@@ -346,7 +327,7 @@ private fun RowScope.renderNodeInRow(node: SmlNode) {
             val mod = if (w != null) Modifier.weight(weight = w) else Modifier.width(amount.dp)
             Spacer(mod)
         }
-        "Text", "Label" -> Text(node.properties.string("text") ?: "")
+        "Text" -> Text(node.properties.string("text") ?: "")
         "Link" -> {
             val label = node.properties.string("text").orEmpty()
             val href = node.properties.string("href").orEmpty()
