@@ -5,6 +5,7 @@ import androidx.compose.ui.window.ComposeViewport
 import at.crowdware.innernet.ui.AppRoot
 import at.crowdware.innernet.ui.ThemeMode
 import at.crowdware.innernet.ui.ThemeStorage
+import at.crowdware.innernet.ui.LoadedSml
 import kotlinx.browser.document
 import kotlinx.browser.window
 import kotlinx.coroutines.await
@@ -43,7 +44,7 @@ private suspend fun fetchSml(path: String): String {
     return response.text().await()
 }
 
-private suspend fun fetchVariantSml(): String {
+private suspend fun fetchVariantSml(): LoadedSml {
     val orientation = if (window.innerWidth > window.innerHeight) "ls" else "pt"
     val lang = (window.navigator.language ?: "en").take(2).lowercase().let { if (it in setOf("de", "en")) it else "en" }
     val baseLower = "home.$orientation"
@@ -58,19 +59,22 @@ private suspend fun fetchVariantSml(): String {
     )
     val paths = candidates.flatMap { resourcePaths(it) }
     var lastError: Throwable? = null
-    for (p in paths) {
+    for (p in candidates) {
+        val pathsFor = resourcePaths(p)
         try {
-            val res = window.fetch(p).await()
-            if (res.ok) return res.text().await()
+            for (path in pathsFor) {
+                val res = window.fetch(path).await()
+                if (res.ok) return LoadedSml(res.text().await(), p)
+            }
         } catch (t: Throwable) {
             lastError = t
         }
     }
     console.warn("Falling back to empty UI; tried $paths, last error: ${lastError?.message}")
-    return "Page { id: \"empty\" title: \"InnerNet\" }"
+    return LoadedSml("Page { id: \"empty\" title: \"InnerNet\" }", "empty.sml")
 }
 
-private suspend fun fetchSmlPage(page: String): String {
+private suspend fun fetchSmlPage(page: String): LoadedSml {
     val normalized = page.removePrefix("/").trim().ifEmpty { page }
     val filename = if (normalized.endsWith(".sml")) normalized else "$normalized.sml"
     val paths = resourcePaths(filename)
@@ -79,7 +83,7 @@ private suspend fun fetchSmlPage(page: String): String {
     for (p in paths) {
         try {
             val res = window.fetch(p).await()
-            if (res.ok) return res.text().await()
+            if (res.ok) return LoadedSml(res.text().await(), filename)
             lastStatus = res.status.toInt()
         } catch (t: Throwable) {
             lastError = t

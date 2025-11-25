@@ -1,3 +1,5 @@
+var who = "Who do you want to be today? (model)"
+
 fun myPageFunction() {
     return "Hello word!"
 }

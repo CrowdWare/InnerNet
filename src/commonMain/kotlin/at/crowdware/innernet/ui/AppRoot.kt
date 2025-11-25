@@ -43,8 +43,8 @@ enum class ThemeMode { Light, Dark; fun toggle() = if (this == Light) Dark else 
 @Composable
 fun AppRoot(
     themeStorage: ThemeStorage,
-    loadSml: suspend () -> String,
-    loadPage: suspend (String) -> String,
+    loadSml: suspend () -> LoadedSml,
+    loadPage: suspend (String) -> LoadedSml,
     loadScript: suspend (String) -> String?,
     openWeb: suspend (String) -> Unit,
     onTitleChange: (String) -> Unit = {}
@@ -53,6 +53,7 @@ fun AppRoot(
     var smlText by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var scriptEngine by remember { mutableStateOf<ScriptEngine?>(null) }
+    var loadedName by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(themeMode) { themeStorage.save(themeMode) }
@@ -62,7 +63,8 @@ fun AppRoot(
             load = loadSml,
             loadScript = loadScript,
             onSuccess = { text, engine ->
-                smlText = text
+                smlText = text.text
+                loadedName = text.name
                 scriptEngine = engine
             },
             onError = { err -> error = err }
@@ -93,6 +95,7 @@ fun AppRoot(
                     smlText == null -> Text("Loading…")
                     else -> RenderSml(
                         text = smlText!!,
+                        scriptEngine = scriptEngine,
                         onPageTitle = onTitleChange,
                         onScriptClick = { script ->
                             scope.launch {
@@ -104,7 +107,9 @@ fun AppRoot(
                                 try {
                                     engine.execute(script)
                                 } catch (t: Throwable) {
-                                    error = t.message ?: t.toString()
+                                    val msg = t.message ?: t.toString()
+                                    error = msg
+                                    updateStatusMessage(engine, msg)
                                 }
                             }
                         },
@@ -121,7 +126,8 @@ fun AppRoot(
                                                 load = { loadPage(page) },
                                                 loadScript = loadScript,
                                                 onSuccess = { text, engine ->
-                                                    smlText = text
+                                                    smlText = text.text
+                                                    loadedName = text.name
                                                     scriptEngine = engine
                                                 },
                                                 onError = { err -> error = err }
@@ -151,21 +157,22 @@ fun AppRoot(
 }
 
 private suspend fun loadUiAndScripts(
-    load: suspend () -> String,
+    load: suspend () -> LoadedSml,
     loadScript: suspend (String) -> String?,
-    onSuccess: (String, ScriptEngine?) -> Unit,
+    onSuccess: (LoadedSml, ScriptEngine?) -> Unit,
     onError: (String) -> Unit
 ) {
     try {
-        val text = load()
+        val loaded = load()
         var engine: ScriptEngine? = null
         var scriptError: Throwable? = null
         try {
-            engine = prepareScriptEngine(text, loadScript)
+            engine = prepareScriptEngine(loaded, loadScript)
         } catch (t: Throwable) {
             scriptError = t
+            updateStatusMessage(engine, t.message ?: t.toString())
         }
-        onSuccess(text, engine)
+        onSuccess(loaded, engine)
         if (scriptError != null) onError(scriptError.message ?: scriptError.toString())
     } catch (t: Throwable) {
         onError(t.message ?: t.toString())
@@ -173,7 +180,7 @@ private suspend fun loadUiAndScripts(
 }
 
 private suspend fun prepareScriptEngine(
-    smlText: String,
+    loaded: LoadedSml,
     loadScript: suspend (String) -> String?
 ): ScriptEngine {
     val engine = ScriptEngine.withStandardLibrary()
@@ -183,7 +190,7 @@ private suspend fun prepareScriptEngine(
         null
     }
     loadScript("global.sms")?.let { engine.execute(it) }
-    val pageScript = extractPageScriptName(smlText)
+    val pageScript = extractPageScriptName(loaded.text) ?: defaultScriptNameFor(loaded.name)
     if (pageScript != null) {
         loadScript(pageScript)?.let { engine.execute(it) }
     }
@@ -195,4 +202,14 @@ private fun extractPageScriptName(text: String): String? {
     val page = roots.firstOrNull { it.name == "Page" } ?: return null
     val prop = page.properties["script"] as? PropertyValue.StringValue
     return prop?.value
+}
+
+data class LoadedSml(val text: String, val name: String)
+
+private fun defaultScriptNameFor(name: String): String = "home.sms"
+
+internal fun updateStatusMessage(engine: ScriptEngine?, message: String) {
+    if (engine == null) return
+    val escaped = message.replace("\\", "\\\\").replace("\"", "\\\"")
+    runCatching { engine.execute("""setStatusMessage("$escaped")""") }
 }

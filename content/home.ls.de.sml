@@ -1,7 +1,6 @@
 Page {
   title: "InnerNet"
   padding: "16 16 16 0"
-  script: "home.sms"
 
   Column {
     alignment: "center"
@@ -11,10 +10,10 @@ Page {
     Markdown { text: "# InnerNet"}
     Markdown { text: "**Befreie Deinen Verstand**. **Verbinde Dich mit dir selbst.**" }
     Spacer { amount: 16 }
-    Text { text: "Which question will guide you today?" style: "question" }
+    Text { text: "global:whichQuestion"}
     Column {
       spacing: 12
-      Button { label: "Who do you want to be today?" link: "page:who"}
+      Button { label: "model:who" link: "page:who"}
       Button { label: "What do you truly want?" link: "page:what"}
       Button { label: "What do you want to learn today?" link: "page:learn"}
       Button { label: "Surprise me" link: "page:surprise"}
@@ -23,5 +22,5 @@ Page {
     }
   }
   Spacer { weight: 1}
-  Text { text: "Placeholder for the StatusBar" }
+  Text { text: "global:statusMessage" }
 }

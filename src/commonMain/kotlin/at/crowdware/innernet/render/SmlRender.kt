@@ -21,14 +21,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import at.crowdware.sms.ScriptEngine
 import at.crowdware.sml.PropertyValue
 import at.crowdware.sml.SmlHandler
 import at.crowdware.sml.SmlParseException
@@ -45,6 +46,7 @@ data class SmlNode(
 private val LocalButtonLinkHandler = compositionLocalOf<(String) -> Unit> { {} }
 private val LocalButtonScriptHandler = compositionLocalOf<(String) -> Unit> { {} }
 private val LocalPageTitleHandler = compositionLocalOf<(String) -> Unit> { {} }
+private val LocalScriptEngine = compositionLocalOf<ScriptEngine?> { null }
 
 // ---------- Parsing ----------
 
@@ -169,8 +171,10 @@ private fun renderLink(node: SmlNode) {
 
 @Composable
 private fun renderMarkdown(node: SmlNode) {
+    val engine = LocalScriptEngine.current
     val raw = node.properties.string("text") ?: ""
-    val (heading, body) = stripHeading(raw)
+    val resolvedRaw = resolveBoundLabel(raw, engine) ?: raw
+    val (heading, body) = stripHeading(resolvedRaw)
     val annotated: AnnotatedString = parseInlineMarkdown(body)
     val style = when (heading) {
         1 -> MaterialTheme.typography.headlineLarge
@@ -186,7 +190,9 @@ private fun renderMarkdown(node: SmlNode) {
 
 @Composable
 private fun renderButton(node: SmlNode, renderChild: @Composable (SmlNode) -> Unit) {
-    val txt = node.properties.string("label")
+    val rawLabel = node.properties.string("label")
+    val engine = LocalScriptEngine.current
+    val txt = resolveBoundLabel(rawLabel, engine)
     val linkHandler = LocalButtonLinkHandler.current
     val scriptHandler = LocalButtonScriptHandler.current
     val link = node.properties.string("link")
@@ -200,6 +206,33 @@ private fun renderButton(node: SmlNode, renderChild: @Composable (SmlNode) -> Un
     }
 }
 
+@Composable
+private fun renderText(node: SmlNode) {
+    val engine = LocalScriptEngine.current
+    val raw = node.properties.string("text") ?: ""
+    val resolved = resolveBoundLabel(raw, engine) ?: raw
+    Text(resolved)
+}
+
+private fun resolveBoundLabel(raw: String?, engine: ScriptEngine?): String? {
+    if (raw == null || engine == null) return raw
+    fun evalVar(name: String): String? =
+        runCatching { engine.executeAndGetKotlin(name) }.onFailure {
+            setStatusMessage(engine, it.message ?: it.toString())
+        }.getOrNull()?.toString()
+    return when {
+        raw.startsWith("model:") -> evalVar(raw.removePrefix("model:").trim()).orEmpty()
+        raw.startsWith("global:") -> evalVar(raw.removePrefix("global:").trim()).orEmpty()
+        else -> raw
+    }
+}
+
+private fun setStatusMessage(engine: ScriptEngine?, message: String) {
+    if (engine == null) return
+    val escaped = message.replace("\\", "\\\\").replace("\"", "\\\"")
+    runCatching { engine.execute("""setStatusMessage("$escaped")""") }
+}
+
 // ---------- Rendering entry ----------
 
 @Composable
@@ -207,12 +240,14 @@ fun RenderSml(
     text: String,
     onLinkClick: (String) -> Unit = {},
     onScriptClick: (String) -> Unit = {},
-    onPageTitle: (String) -> Unit = {}
+    onPageTitle: (String) -> Unit = {},
+    scriptEngine: ScriptEngine? = null
 ) {
     CompositionLocalProvider(
         LocalButtonLinkHandler provides onLinkClick,
         LocalButtonScriptHandler provides onScriptClick,
-        LocalPageTitleHandler provides onPageTitle
+        LocalPageTitleHandler provides onPageTitle,
+        LocalScriptEngine provides scriptEngine
     ) {
         val roots = remember(text) { parseSml(text) }
         val page = roots.firstOrNull { it.name == "Page" }
@@ -249,7 +284,7 @@ private fun renderNode(node: SmlNode) {
             renderRowNode(node = node) { child -> renderNodeInRow(child) }
         }
         "Spacer" -> Spacer(Modifier.height((node.properties.int("amount") ?: 0).dp))
-        "Text" -> Text(node.properties.string("text") ?: "")
+        "Text" -> renderText(node)
         "Link" -> renderLink(node)
         "Markdown" -> renderMarkdown(node)
         "Button" -> renderButton(node) { child -> renderNode(child) }
@@ -277,7 +312,7 @@ private fun ColumnScope.renderNodeInColumn(node: SmlNode) {
             val mod = if (w != null) Modifier.weight(weight = w) else Modifier.height(amount.dp)
             Spacer(mod)
         }
-        "Text" -> Text(node.properties.string("text") ?: "")
+        "Text" -> renderText(node)
         "Link" -> renderLink(node)
         "Markdown" -> renderMarkdown(node)
         "Button" -> renderButton(node) { child -> renderNode(child) }
@@ -304,7 +339,7 @@ private fun RowScope.renderNodeInRow(node: SmlNode) {
             val mod = if (w != null) Modifier.weight(weight = w) else Modifier.width(amount.dp)
             Spacer(mod)
         }
-        "Text" -> Text(node.properties.string("text") ?: "")
+        "Text" -> renderText(node)
         "Link" -> renderLink(node)
         "Markdown" -> renderMarkdown(node)
         "Button" -> renderButton(node) { child -> renderNode(child) }
