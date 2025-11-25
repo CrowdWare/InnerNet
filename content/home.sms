@@ -1,1 +1,5 @@
 var whichQuestion = "Which question will guide you today?"
+
+fun openRegistration() {
+    println("open registration clicked")
+}
