@@ -1,3 +1,2 @@
-fun randomNumber() {
-    return 13
-}
+var statusMessage = "InnerNet loaded"
+    set(value) = field = value
