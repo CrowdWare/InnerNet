@@ -18,7 +18,9 @@ fun main() {
             themeStorage = WebThemeStorage,
             loadSml = { fetchVariantSml() },
             loadPage = { fetchSmlPage(it) },
-            openWeb = { openWebLink(it) }
+            loadScript = { fetchSmsScript(it) },
+            openWeb = { openWebLink(it) },
+            onTitleChange = { document.title = it }
         )
     }
 }
@@ -44,9 +46,17 @@ private suspend fun fetchSml(path: String): String {
 private suspend fun fetchVariantSml(): String {
     val orientation = if (window.innerWidth > window.innerHeight) "ls" else "pt"
     val lang = (window.navigator.language ?: "en").take(2).lowercase().let { if (it in setOf("de", "en")) it else "en" }
-    val baseName = "Home.$orientation.$lang.sml"
-    val fallback = "home.sml"
-    val paths = listOf(baseName, fallback)
+    val baseLower = "home.$orientation"
+    val baseUpper = "Home.$orientation"
+    val candidates = listOf(
+        "$baseLower.$lang.sml",
+        "$baseLower.en.sml",
+        "$baseUpper.$lang.sml",
+        "$baseUpper.en.sml",
+        "home.sml",
+        "Home.sml"
+    )
+    val paths = candidates.flatMap { resourcePaths(it) }
     var lastError: Throwable? = null
     for (p in paths) {
         try {
@@ -63,11 +73,7 @@ private suspend fun fetchVariantSml(): String {
 private suspend fun fetchSmlPage(page: String): String {
     val normalized = page.removePrefix("/").trim().ifEmpty { page }
     val filename = if (normalized.endsWith(".sml")) normalized else "$normalized.sml"
-    val paths = listOf(
-        filename,
-        "wordpress-plugin/innernet-webapp/content/$filename",
-        "innernet-webapp/content/$filename"
-    )
+    val paths = resourcePaths(filename)
     var lastStatus: Int? = null
     var lastError: Throwable? = null
     for (p in paths) {
@@ -92,12 +98,7 @@ private suspend fun openWebLink(raw: String) {
     val localPath = normalized.removePrefix("/").ifEmpty { normalized }
     val hasExtension = localPath.substringAfterLast('/', localPath).contains('.')
     val filename = if (hasExtension) localPath else "$localPath.html"
-    val paths = listOf(
-        filename,
-        "wordpress-plugin/innernet-webapp/content/$filename",
-        "innernet-webapp/content/$filename",
-        localPath
-    )
+    val paths = if (isLocalHost()) listOf(filename, localPath) else listOf("content/$filename")
     for (p in paths) {
         try {
             val res = window.fetch(p).await()
@@ -111,4 +112,32 @@ private suspend fun openWebLink(raw: String) {
     }
     console.warn("No web target reachable for '$raw', falling back to first candidate: $filename")
     window.location.href = filename
+}
+
+private suspend fun fetchSmsScript(name: String): String? {
+    val normalized = name.removePrefix("/").trim().ifEmpty { name }
+    val filename = if (normalized.endsWith(".sms")) normalized else "$normalized.sms"
+    val paths = resourcePaths(filename)
+    var lastStatus: Int? = null
+    var lastError: Throwable? = null
+    for (p in paths) {
+        try {
+            val res = window.fetch(p).await()
+            if (res.ok) return res.text().await()
+            lastStatus = res.status.toInt()
+        } catch (t: Throwable) {
+            lastError = t
+        }
+    }
+    val reason = lastError?.message ?: lastStatus?.let { "HTTP $it" } ?: "unknown error"
+    console.warn("Could not load sms script '$name'; tried ${paths.joinToString()} ($reason)")
+    return null
+}
+
+private fun resourcePaths(filename: String): List<String> =
+    listOf("../content/$filename")
+
+private fun isLocalHost(): Boolean {
+    val host = window.location.hostname.lowercase()
+    return host == "localhost" || host == "127.0.0.1"
 }

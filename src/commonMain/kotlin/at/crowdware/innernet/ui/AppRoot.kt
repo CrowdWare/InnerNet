@@ -27,7 +27,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import at.crowdware.innernet.render.RenderSml
+import at.crowdware.innernet.render.SmlNode
+import at.crowdware.innernet.render.parseSml
 import kotlinx.coroutines.launch
+import at.crowdware.sms.ScriptEngine
+import at.crowdware.sml.PropertyValue
 
 interface ThemeStorage {
     fun load(): ThemeMode
@@ -41,21 +45,28 @@ fun AppRoot(
     themeStorage: ThemeStorage,
     loadSml: suspend () -> String,
     loadPage: suspend (String) -> String,
-    openWeb: suspend (String) -> Unit
+    loadScript: suspend (String) -> String?,
+    openWeb: suspend (String) -> Unit,
+    onTitleChange: (String) -> Unit = {}
 ) {
     var themeMode by remember { mutableStateOf(themeStorage.load()) }
     var smlText by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var scriptEngine by remember { mutableStateOf<ScriptEngine?>(null) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(themeMode) { themeStorage.save(themeMode) }
 
     LaunchedEffect(Unit) {
-        try {
-            smlText = loadSml()
-        } catch (t: Throwable) {
-            error = t.message ?: t.toString()
-        }
+        loadUiAndScripts(
+            load = loadSml,
+            loadScript = loadScript,
+            onSuccess = { text, engine ->
+                smlText = text
+                scriptEngine = engine
+            },
+            onError = { err -> error = err }
+        )
     }
 
     val colors = when (themeMode) {
@@ -82,6 +93,21 @@ fun AppRoot(
                     smlText == null -> Text("Loading…")
                     else -> RenderSml(
                         text = smlText!!,
+                        onPageTitle = onTitleChange,
+                        onScriptClick = { script ->
+                            scope.launch {
+                                val engine = scriptEngine
+                                if (engine == null) {
+                                    error = "Kein ScriptEngine geladen"
+                                    return@launch
+                                }
+                                try {
+                                    engine.execute(script)
+                                } catch (t: Throwable) {
+                                    error = t.message ?: t.toString()
+                                }
+                            }
+                        },
                         onLinkClick = { link ->
                             scope.launch {
                                 when {
@@ -91,7 +117,15 @@ fun AppRoot(
                                         smlText = null
                                         error = null
                                         try {
-                                            smlText = loadPage(page)
+                                            loadUiAndScripts(
+                                                load = { loadPage(page) },
+                                                loadScript = loadScript,
+                                                onSuccess = { text, engine ->
+                                                    smlText = text
+                                                    scriptEngine = engine
+                                                },
+                                                onError = { err -> error = err }
+                                            )
                                         } catch (t: Throwable) {
                                             error = t.message ?: t.toString()
                                         }
@@ -114,4 +148,51 @@ fun AppRoot(
             }
         }
     }
+}
+
+private suspend fun loadUiAndScripts(
+    load: suspend () -> String,
+    loadScript: suspend (String) -> String?,
+    onSuccess: (String, ScriptEngine?) -> Unit,
+    onError: (String) -> Unit
+) {
+    try {
+        val text = load()
+        var engine: ScriptEngine? = null
+        var scriptError: Throwable? = null
+        try {
+            engine = prepareScriptEngine(text, loadScript)
+        } catch (t: Throwable) {
+            scriptError = t
+        }
+        onSuccess(text, engine)
+        if (scriptError != null) onError(scriptError.message ?: scriptError.toString())
+    } catch (t: Throwable) {
+        onError(t.message ?: t.toString())
+    }
+}
+
+private suspend fun prepareScriptEngine(
+    smlText: String,
+    loadScript: suspend (String) -> String?
+): ScriptEngine {
+    val engine = ScriptEngine.withStandardLibrary()
+    engine.registerKotlinFunction("println") { args ->
+        val msg = args.firstOrNull()?.toString() ?: "null"
+        println(msg)
+        null
+    }
+    loadScript("global.sms")?.let { engine.execute(it) }
+    val pageScript = extractPageScriptName(smlText)
+    if (pageScript != null) {
+        loadScript(pageScript)?.let { engine.execute(it) }
+    }
+    return engine
+}
+
+private fun extractPageScriptName(text: String): String? {
+    val roots: List<SmlNode> = runCatching { parseSml(text) }.getOrNull() ?: return null
+    val page = roots.firstOrNull { it.name == "Page" } ?: return null
+    val prop = page.properties["script"] as? PropertyValue.StringValue
+    return prop?.value
 }

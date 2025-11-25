@@ -2,7 +2,7 @@
 /**
  * Plugin Name: InnerNet WebApp
  * Description: Stellt die InnerNet Webapp als Vollbild ohne WordPress-Menü oder Footer bereit und bringt alle benötigten Assets mit.
- * Version: 0.1.2
+ * Version: 0.1.16
  * Author: InnerNet
  */
 

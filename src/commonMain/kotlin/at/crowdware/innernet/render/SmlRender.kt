@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
@@ -42,6 +43,8 @@ data class SmlNode(
 )
 
 private val LocalButtonLinkHandler = compositionLocalOf<(String) -> Unit> { {} }
+private val LocalButtonScriptHandler = compositionLocalOf<(String) -> Unit> { {} }
+private val LocalPageTitleHandler = compositionLocalOf<(String) -> Unit> { {} }
 
 // ---------- Parsing ----------
 
@@ -75,7 +78,7 @@ private class NodeBuildingHandler : SmlHandler {
     }
 }
 
-private fun parseSml(text: String): List<SmlNode> {
+internal fun parseSml(text: String): List<SmlNode> {
     val handler = NodeBuildingHandler()
     SmlSaxParser(text).parse(handler)
     return handler.result()
@@ -185,8 +188,13 @@ private fun renderMarkdown(node: SmlNode) {
 private fun renderButton(node: SmlNode, renderChild: @Composable (SmlNode) -> Unit) {
     val txt = node.properties.string("label")
     val linkHandler = LocalButtonLinkHandler.current
+    val scriptHandler = LocalButtonScriptHandler.current
     val link = node.properties.string("link")
-    Button(onClick = { if (link != null) linkHandler(link) }) {
+    val script = node.properties.string("onClick")
+    Button(onClick = {
+        if (script != null) scriptHandler(script)
+        if (link != null) linkHandler(link)
+    }) {
         if (txt != null) Text(txt)
         node.children.forEach { child -> renderChild(child) }
     }
@@ -195,8 +203,17 @@ private fun renderButton(node: SmlNode, renderChild: @Composable (SmlNode) -> Un
 // ---------- Rendering entry ----------
 
 @Composable
-fun RenderSml(text: String, onLinkClick: (String) -> Unit = {}) {
-    CompositionLocalProvider(LocalButtonLinkHandler provides onLinkClick) {
+fun RenderSml(
+    text: String,
+    onLinkClick: (String) -> Unit = {},
+    onScriptClick: (String) -> Unit = {},
+    onPageTitle: (String) -> Unit = {}
+) {
+    CompositionLocalProvider(
+        LocalButtonLinkHandler provides onLinkClick,
+        LocalButtonScriptHandler provides onScriptClick,
+        LocalPageTitleHandler provides onPageTitle
+    ) {
         val roots = remember(text) { parseSml(text) }
         val page = roots.firstOrNull { it.name == "Page" }
         if (page != null) {
@@ -213,6 +230,10 @@ fun RenderSml(text: String, onLinkClick: (String) -> Unit = {}) {
 private fun renderNode(node: SmlNode) {
     when (node.name) {
         "Page" -> {
+            node.properties.string("title")?.let { title ->
+                val titleHandler = LocalPageTitleHandler.current
+                SideEffect { titleHandler(title) }
+            }
             renderColumnNode(
                 node = node,
                 baseModifier = Modifier.fillMaxSize(),

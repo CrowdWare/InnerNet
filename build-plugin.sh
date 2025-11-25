@@ -7,6 +7,11 @@ set -euo pipefail
 PLUGIN_DIR="wordpress-plugin/innernet-webapp"
 PLUGIN_FILE="${PLUGIN_DIR}/innernet-webapp.php"
 OUTPUT_DIR="wordpress-plugin/build"
+APP_RESOURCES_DIR="build/processedResources/js/main"
+APP_BUNDLE_DIR="build/kotlin-webpack/js/developmentExecutable"
+APP_TARGET_DIR="${PLUGIN_DIR}/app"
+CONTENT_SOURCE_DIR="content"
+CONTENT_TARGET_DIR="${PLUGIN_DIR}/content"
 
 if [[ ! -f "${PLUGIN_FILE}" ]]; then
   echo "Plugin file not found at ${PLUGIN_FILE}" >&2
@@ -28,13 +33,33 @@ new_version="${major}.${minor}.$((patch + 1))"
 echo "Aktualisiere Version: ${current_version} -> ${new_version}"
 perl -pi -e "s/(\\* Version:\\s*)${current_version}/\${1}${new_version}/" "${PLUGIN_FILE}"
 
+# Build aktuelle Web-Artefakte
+echo "Baue JS-Bundle über gradlew (Development Webpack) …"
+./gradlew jsBrowserDevelopmentWebpack
+
+# Kopiere frische Dateien ins Plugin-App-Verzeichnis
+if [[ ! -d "${APP_RESOURCES_DIR}" || ! -d "${APP_BUNDLE_DIR}" ]]; then
+  echo "Build-Ausgabe nicht gefunden (Resources: ${APP_RESOURCES_DIR}, Bundle: ${APP_BUNDLE_DIR})" >&2
+  exit 1
+fi
+
+echo "Synchronisiere Ressourcen -> ${APP_TARGET_DIR}/"
+rsync -av --delete "${APP_RESOURCES_DIR}/" "${APP_TARGET_DIR}/"
+
+echo "Kopiere Bundle (JS/WASM) -> ${APP_TARGET_DIR}/"
+rsync -av "${APP_BUNDLE_DIR}/" "${APP_TARGET_DIR}/"
+
+echo "Kopiere Content-Dateien -> ${CONTENT_TARGET_DIR}/"
+mkdir -p "${CONTENT_TARGET_DIR}"
+rsync -av --delete "${CONTENT_SOURCE_DIR}/" "${CONTENT_TARGET_DIR}/"
+
 mkdir -p "${OUTPUT_DIR}"
 zip_name="${OUTPUT_DIR}/innernet-webapp-${new_version}.zip"
 
 echo "Erstelle Zip: ${zip_name}"
 (
   cd "${PLUGIN_DIR}"
-  zip -r "../build/innernet-webapp-${new_version}.zip" .
+  zip -r "../build/innernet-webapp-${new_version}.zip" . -x "README.md"
 )
 
 echo "Fertig: ${zip_name}"
