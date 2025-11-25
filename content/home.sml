@@ -7,16 +7,16 @@ Page {
     spacing: 24
     padding: "16 16 16 32"
 
-    Markdown { text: "# InnerNet"}
-    Markdown { text: "model:subLabel" }
+    Markdown { text: "string:title"}
+    Markdown { text: "string:subLabel" }
     Spacer { amount: 16 }
-    Text { text: "model:whichQuestion" }
+    Text { text: "string:question" }
     Column {
       spacing: 12
-      Button { label: "model:who" link: "page:who"}
-      Button { label: "What do you truly want?" link: "page:what"}
-      Button { label: "What do you want to learn today?" link: "page:learn"}
-      Button { label: "Surprise me" link: "page:surprise"}
+      Button { label: "string:who" link: "page:who"}
+      Button { label: "string:what" link: "page:what"}
+      Button { label: "string:learn" link: "page:learn"}
+      Button { label: "string:surprise" link: "page:surprise"}
     }
   }
   Spacer { weight: 1}

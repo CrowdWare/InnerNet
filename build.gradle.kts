@@ -40,6 +40,7 @@ kotlin {
                 implementation(libs.androidx.lifecycle.runtimeCompose)
                 implementation("at.crowdware:sms:1.11")
                 implementation("at.crowdware:sml:0.1.0")
+                implementation("at.crowdware.sml:SMLRender:0.1.0")
             }
         }
         val commonTest by getting {

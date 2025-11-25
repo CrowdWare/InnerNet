@@ -1,9 +1,1 @@
-var who = "Who do you want to be today? (model)"
 var whichQuestion = "Which question will guide you today?"
-var language = "en"
-
-var subLabel = "**Free your mind**. **Connect with yourself.**"
-    get() = when(language) {
-        "de" -> "**Befreie Deinen Verstand. Verbinde Dich mit Dir selbst**"
-        else -> "$field"
-    }

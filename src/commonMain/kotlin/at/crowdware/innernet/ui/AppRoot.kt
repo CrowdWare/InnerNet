@@ -26,12 +26,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import at.crowdware.innernet.render.RenderSml
-import at.crowdware.innernet.render.SmlNode
-import at.crowdware.innernet.render.parseSml
+//import at.crowdware.innernet.render.RenderSml
+//import at.crowdware.innernet.render.SmlNode
+//import at.crowdware.innernet.render.parseSml
 import kotlinx.coroutines.launch
 import at.crowdware.sms.ScriptEngine
 import at.crowdware.sml.PropertyValue
+import at.crowdware.smlrender.RenderSml
+import at.crowdware.smlrender.SmlNode
+import at.crowdware.sml.SmlHandler
+import at.crowdware.sml.SmlParseException
+import at.crowdware.sml.SmlSaxParser
+import at.crowdware.sml.Span
+
 
 interface ThemeStorage {
     fun load(): ThemeMode
@@ -46,8 +53,11 @@ fun AppRoot(
     loadSml: suspend () -> LoadedSml,
     loadPage: suspend (String) -> LoadedSml,
     loadScript: suspend (String) -> String?,
+    loadStrings: suspend (String) -> String?,
     openWeb: suspend (String) -> Unit,
     language: String? = null,
+    availableLanguages: List<String> = listOf("en", "de"),
+    defaultLanguage: String = "en",
     onTitleChange: (String) -> Unit = {}
 ) {
     var themeMode by remember { mutableStateOf(themeStorage.load()) }
@@ -55,6 +65,7 @@ fun AppRoot(
     var error by remember { mutableStateOf<String?>(null) }
     var scriptEngine by remember { mutableStateOf<ScriptEngine?>(null) }
     var loadedName by remember { mutableStateOf<String?>(null) }
+    var strings by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(themeMode) { themeStorage.save(themeMode) }
@@ -63,11 +74,15 @@ fun AppRoot(
         loadUiAndScripts(
             load = loadSml,
             loadScript = loadScript,
+            loadStrings = loadStrings,
             language = language,
+            availableLanguages = availableLanguages,
+            defaultLanguage = defaultLanguage,
             onSuccess = { text, engine ->
                 smlText = text.text
                 loadedName = text.name
                 scriptEngine = engine
+                strings = text.strings
             },
             onError = { err -> error = err }
         )
@@ -98,6 +113,7 @@ fun AppRoot(
                     else -> RenderSml(
                         text = smlText!!,
                         scriptEngine = scriptEngine,
+                        strings = strings,
                         onPageTitle = onTitleChange,
                         onScriptClick = { script ->
                             scope.launch {
@@ -127,14 +143,18 @@ fun AppRoot(
                                             loadUiAndScripts(
                                                 load = { loadPage(page) },
                                                 loadScript = loadScript,
+                                                loadStrings = loadStrings,
                                                 language = language,
+                                                availableLanguages = availableLanguages,
+                                                defaultLanguage = defaultLanguage,
                                                 onSuccess = { text, engine ->
                                                     smlText = text.text
                                                     loadedName = text.name
                                                     scriptEngine = engine
-                                                },
-                                                onError = { err -> error = err }
-                                            )
+                                                    strings = text.strings
+                                            },
+                                            onError = { err -> error = err }
+                                        )
                                         } catch (t: Throwable) {
                                             error = t.message ?: t.toString()
                                         }
@@ -162,12 +182,16 @@ fun AppRoot(
 private suspend fun loadUiAndScripts(
     load: suspend () -> LoadedSml,
     loadScript: suspend (String) -> String?,
+    loadStrings: suspend (String) -> String?,
     language: String?,
+    availableLanguages: List<String>,
+    defaultLanguage: String,
     onSuccess: (LoadedSml, ScriptEngine?) -> Unit,
     onError: (String) -> Unit
 ) {
     try {
         val loaded = load()
+        val strings = loadLocalizedStrings(loadStrings, language, availableLanguages, defaultLanguage).getOrDefault(emptyMap())
         var engine: ScriptEngine? = null
         var scriptError: Throwable? = null
         try {
@@ -176,7 +200,7 @@ private suspend fun loadUiAndScripts(
             scriptError = t
             updateStatusMessage(engine, t.message ?: t.toString())
         }
-        onSuccess(loaded, engine)
+        onSuccess(loaded.copy(strings = strings), engine)
         if (scriptError != null) onError(scriptError.message ?: scriptError.toString())
     } catch (t: Throwable) {
         onError(t.message ?: t.toString())
@@ -213,12 +237,100 @@ private fun extractPageScriptName(text: String): String? {
     return prop?.value
 }
 
-data class LoadedSml(val text: String, val name: String)
+data class LoadedSml(val text: String, val name: String, val strings: Map<String, String> = emptyMap())
+private data class LoadedStrings(val map: Map<String, String>)
 
 private fun defaultScriptNameFor(name: String): String = "home.sms"
 
 internal fun updateStatusMessage(engine: ScriptEngine?, message: String) {
     if (engine == null) return
     val escaped = message.replace("\\", "\\\\").replace("\"", "\\\"")
-    runCatching { engine.execute("""setStatusMessage("$escaped")""") }
+    runCatching { engine.execute("""statusMessage = "$escaped"""") }
+}
+
+private suspend fun loadLocalizedStrings(
+    loadStrings: suspend (String) -> String?,
+    language: String?,
+    availableLanguages: List<String>,
+    defaultLanguage: String
+): Result<Map<String, String>> {
+    val normalizedLang = language?.lowercase()
+        ?.takeIf { availableLanguages.isEmpty() || availableLanguages.map { it.lowercase() }.contains(it) }
+    val defaultLang = defaultLanguage.lowercase()
+
+    val candidateLangs = buildList {
+        if (normalizedLang != null) add(normalizedLang)
+        if (defaultLang != normalizedLang) add(defaultLang)
+    }
+
+    var lastErr: Throwable? = null
+    var defaultMap: Map<String, String> = emptyMap()
+    var localizedMap: Map<String, String> = emptyMap()
+
+    for (lang in candidateLangs) {
+        val candidateFile = "strings_${lang}.sml"
+        try {
+            val txt = loadStrings(candidateFile)
+            if (txt != null) {
+                val parsed = parseStringsSml(txt, lang)
+                if (lang == defaultLang) defaultMap = parsed else localizedMap = parsed
+            }
+        } catch (t: Throwable) {
+            lastErr = t
+        }
+    }
+
+    val merged = defaultMap + localizedMap
+    return if (merged.isNotEmpty()) Result.success(merged)
+    else Result.failure(lastErr ?: IllegalStateException("No strings file found"))
+}
+
+private fun parseStringsSml(text: String, language: String): Map<String, String> {
+    val roots = runCatching { parseSml(text) }.getOrNull() ?: return emptyMap()
+    val stringsNode = roots.firstOrNull { it.name == "Strings" } ?: return emptyMap()
+    val langProp = (stringsNode.properties["lang"] as? PropertyValue.StringValue)?.value
+    if (langProp != null && langProp.lowercase() != language.lowercase()) return emptyMap()
+    val result = mutableMapOf<String, String>()
+    stringsNode.children.filter { it.name == "String" }.forEach { strNode ->
+        val key = (strNode.properties["key"] as? PropertyValue.StringValue)?.value
+        val value = (strNode.properties["text"] as? PropertyValue.StringValue)?.value
+        if (key != null && value != null) result[key] = value
+    }
+    return result
+}
+
+private class NodeBuildingHandler : SmlHandler {
+    private val stack = ArrayDeque<MutableNode>()
+    private val roots = mutableListOf<MutableNode>()
+
+    override fun startElement(name: String) {
+        stack.addLast(MutableNode(name))
+    }
+
+    override fun onProperty(name: String, value: PropertyValue) {
+        val cur = stack.lastOrNull() ?: throw SmlParseException("Property outside of element", Span(0, 0, 0))
+        cur.props[name] = value
+    }
+
+    override fun endElement(name: String) {
+        val node = stack.removeLastOrNull() ?: throw SmlParseException("Mismatched end '$name'", Span(0, 0, 0))
+        if (node.name != name) throw SmlParseException("Expected end of ${node.name}, got $name", Span(0, 0, 0))
+        if (stack.isEmpty()) roots += node else stack.last().children += node
+    }
+
+    fun result(): List<SmlNode> = roots.map { it.toImmutable() }
+
+    private data class MutableNode(
+        val name: String,
+        val props: MutableMap<String, PropertyValue> = LinkedHashMap(),
+        val children: MutableList<MutableNode> = mutableListOf()
+    ) {
+        fun toImmutable(): SmlNode = SmlNode(name, props.toMap(), children.map { it.toImmutable() })
+    }
+}
+
+internal fun parseSml(text: String): List<SmlNode> {
+    val handler = NodeBuildingHandler()
+    SmlSaxParser(text).parse(handler)
+    return handler.result()
 }

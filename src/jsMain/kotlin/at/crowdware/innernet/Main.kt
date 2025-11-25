@@ -20,8 +20,11 @@ fun main() {
             loadSml = { fetchVariantSml() },
             loadPage = { fetchSmlPage(it) },
             loadScript = { fetchSmsScript(it) },
+            loadStrings = { fetchStringsFile(it) },
             openWeb = { openWebLink(it) },
             language = currentLanguage(),
+            availableLanguages = listOf("en", "de"),
+            defaultLanguage = "en",
             onTitleChange = { document.title = it }
         )
     }
@@ -136,6 +139,22 @@ private suspend fun fetchSmsScript(name: String): String? {
     }
     val reason = lastError?.message ?: lastStatus?.let { "HTTP $it" } ?: "unknown error"
     console.warn("Could not load sms script '$name'; tried ${paths.joinToString()} ($reason)")
+    return null
+}
+
+private suspend fun fetchStringsFile(name: String): String? {
+    val normalized = name.removePrefix("/").trim().ifEmpty { name }
+    val filename = if (normalized.endsWith(".sml")) normalized else "$normalized.sml"
+    val paths = resourcePaths(filename)
+    for (p in paths) {
+        try {
+            val res = window.fetch(p).await()
+            if (res.ok) return res.text().await()
+        } catch (_: Throwable) {
+            // ignore, try next
+        }
+    }
+    console.warn("Could not load strings file '$name'; tried ${paths.joinToString()}")
     return null
 }
 

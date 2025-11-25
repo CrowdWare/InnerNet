@@ -1,6 +1,2 @@
 var statusMessage = "InnerNet loaded"
-
-
-fun setStatusMessage(value) {
-    statusMessage = value
-}
+    set(value) = field = value
